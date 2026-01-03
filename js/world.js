@@ -44,8 +44,9 @@ class World {
     }
 
     generateObstaclesAhead(currentX) {
-        const generateDistance = 4000; // Generate more ahead for smoother experience
-        const targetX = currentX + generateDistance;
+        const generateDistance = CONFIG.OBSTACLE_GENERATE_AHEAD || 4000;
+        const maxDistance = CONFIG.WORLD_MAX_DISTANCE || 10000;
+        const targetX = Math.min(currentX + generateDistance, maxDistance + CONFIG.RAGDOLL_START_X);
 
         if (targetX <= this.generatedUpTo) return [];
 

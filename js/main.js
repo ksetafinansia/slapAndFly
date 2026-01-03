@@ -234,13 +234,14 @@ class SlapGame {
 
         // Update camera during flight and generate obstacles ahead
         if (this.game.state === CONFIG.STATES.FLYING) {
-            this.camera.follow(this.ragdoll.getPosition());
+            const speed = this.ragdoll.getSpeed();
+            this.camera.follow(this.ragdoll.getPosition(), speed);
             this.camera.update();
 
             this.game.updateDistance(this.ragdoll.getPosition().x);
-            this.game.checkEndCondition(this.ragdoll.getSpeed(), deltaTime);
+            this.game.checkEndCondition(speed, deltaTime);
 
-            // Generate obstacles dynamically after 1000m
+            // Generate obstacles dynamically up to 10km
             const newObstacles = this.world.generateObstaclesAhead(this.ragdoll.getPosition().x);
             if (newObstacles.length > 0) {
                 this.world.addToWorld(this.engine.world, newObstacles);

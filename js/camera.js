@@ -9,11 +9,13 @@ class Camera {
         this.targetZoom = 1;
         this.minZoom = 0.35;
         this.maxZoom = 1;
+        this.currentSpeed = 0;
     }
 
-    follow(target) {
+    follow(target, speed = 0) {
         // X follow - keep ragdoll in left third of screen
         this.targetX = target.x - CONFIG.CANVAS_WIDTH / 3;
+        this.currentSpeed = speed;
 
         // Calculate zoom to keep both ragdoll and ground visible
         const groundY = CONFIG.CANVAS_HEIGHT - CONFIG.GROUND_HEIGHT;
@@ -35,8 +37,16 @@ class Camera {
     }
 
     update() {
+        // Adaptive smoothing based on speed - faster objects need snappier camera
+        let smoothing = CONFIG.CAMERA_SMOOTHING;
+        if (this.currentSpeed > CONFIG.CAMERA_SPEED_THRESHOLD) {
+            // Interpolate between normal and fast smoothing based on speed
+            const speedFactor = Math.min(1, (this.currentSpeed - CONFIG.CAMERA_SPEED_THRESHOLD) / 20);
+            smoothing = CONFIG.CAMERA_SMOOTHING + (CONFIG.CAMERA_SMOOTHING_FAST - CONFIG.CAMERA_SMOOTHING) * speedFactor;
+        }
+
         // Smooth X follow
-        this.x += (this.targetX - this.x) * CONFIG.CAMERA_SMOOTHING;
+        this.x += (this.targetX - this.x) * smoothing;
 
         // Smooth zoom
         this.zoom += (this.targetZoom - this.zoom) * 0.06;
@@ -50,6 +60,7 @@ class Camera {
         this.zoom = 1;
         this.targetX = 0;
         this.targetZoom = 1;
+        this.currentSpeed = 0;
     }
 
     applyTransform(ctx) {

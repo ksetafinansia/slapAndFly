@@ -41,6 +41,12 @@ const CONFIG = {
 
     // Camera
     CAMERA_SMOOTHING: 0.08,
+    CAMERA_SMOOTHING_FAST: 0.25, // For high-speed tracking
+    CAMERA_SPEED_THRESHOLD: 15, // Speed above which to use fast smoothing
+
+    // World Generation
+    WORLD_MAX_DISTANCE: 10000, // 10km max world generation
+    OBSTACLE_GENERATE_AHEAD: 4000, // Generate this far ahead
 
     // World
     GROUND_HEIGHT: 120,
