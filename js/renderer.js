@@ -153,82 +153,220 @@ class Renderer {
         }
     }
 
-    // Draw power meter bar
-    drawPowerMeter(ratio, locked = false) {
+    // Draw power meter bar with bonus zone
+    drawPowerMeter(ratio, locked = false, isPowerBonus = false) {
         const ctx = this.ctx;
         const x = 50;
-        const y = CONFIG.CANVAS_HEIGHT - 150;
-        const width = 300;
-        const height = 30;
+        const y = CONFIG.CANVAS_HEIGHT - 120;
+        const width = 350;
+        const height = 35;
 
+        // Background
         ctx.fillStyle = CONFIG.COLORS.POWER_BAR_BG;
         ctx.fillRect(x, y, width, height);
 
-        ctx.fillStyle = CONFIG.COLORS.POWER_BAR_OPTIMAL + '40';
-        ctx.fillRect(x + width * 0.4, y, width * 0.2, height);
+        // Bonus zone (90-100%) - red
+        ctx.fillStyle = '#e74c3c40';
+        ctx.fillRect(x + width * 0.9, y, width * 0.1, height);
 
-        ctx.fillStyle = locked ? '#fdcb6e' : CONFIG.COLORS.POWER_BAR_FILL;
+        // Fill bar - red if in bonus zone
+        if (ratio >= 0.9) {
+            ctx.fillStyle = CONFIG.COLORS.POWER_BAR_FULL;
+        } else {
+            ctx.fillStyle = CONFIG.COLORS.POWER_BAR_FILL;
+        }
         ctx.fillRect(x, y, width * ratio, height);
 
+        // Border
         ctx.strokeStyle = CONFIG.COLORS.UI_TEXT;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.strokeRect(x, y, width, height);
 
-        if (!locked) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(x + width * ratio - 3, y - 5, 6, height + 10);
-        }
-
-        ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText('POWER', x, y - 10);
-    }
-
-    // Draw angle meter gauge
-    drawAngleMeter(ratio, locked = false) {
-        const ctx = this.ctx;
-        const centerX = 200;
-        const centerY = CONFIG.CANVAS_HEIGHT - 250;
-        const radius = 80;
-        const startAngle = Math.PI * 0.7;
-        const endAngle = Math.PI * 0.3;
-
+        // Bonus zone marker
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, startAngle, Math.PI * 2 + endAngle);
-        ctx.strokeStyle = CONFIG.COLORS.ANGLE_GAUGE_BG;
-        ctx.lineWidth = 15;
+        ctx.moveTo(x + width * 0.9, y);
+        ctx.lineTo(x + width * 0.9, y + height);
         ctx.stroke();
 
+        // Moving indicator (if not locked)
+        if (!locked) {
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 5;
+            ctx.fillRect(x + width * ratio - 3, y - 8, 6, height + 16);
+            ctx.shadowBlur = 0;
+        }
+
+        // Labels
         ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
-        ctx.font = '12px Arial';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('POWER', x, y - 12);
+
+        // Percentage
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.floor(ratio * 100)}%`, x + width, y - 12);
+
+        // Bonus indicator
+        if (isPowerBonus && locked) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('💪 2x POWER!', x + width / 2, y + height + 25);
+        }
+    }
+
+    // Draw angle meter gauge - positioned above power meter, 0-90 degrees
+    drawAngleMeter(ratio, locked = false, sweetSpot = null) {
+        const ctx = this.ctx;
+
+        // Position above power meter (bottom-left area)
+        const centerX = 225;
+        const centerY = CONFIG.CANVAS_HEIGHT - 220;
+        const radius = 70;
+
+        // Arc from right (0°) to up (90°) - quarter circle
+        const startAngle = 0;              // 0° = pointing right (ground)
+        const endAngle = -Math.PI / 2;     // 90° = pointing up
+        const angleRange = Math.PI / 2;    // 90 degree sweep
+
+        // Background arc (thick)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, startAngle, endAngle, true);
+        ctx.strokeStyle = CONFIG.COLORS.ANGLE_GAUGE_BG;
+        ctx.lineWidth = 25;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Draw sweet spots (green=1x, yellow=3x, red=5x)
+        const spots = CONFIG.SWEET_SPOTS;
+        const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+
+        for (const spot of spots) {
+            const spotStart = startAngle - (spot.center - spot.width / 2) * angleRange;
+            const spotEnd = startAngle - (spot.center + spot.width / 2) * angleRange;
+
+            ctx.save();
+            ctx.shadowColor = spot.color;
+            ctx.shadowBlur = 12 * pulse;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, spotStart, spotEnd, true);
+            ctx.strokeStyle = spot.color;
+            ctx.lineWidth = 28;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Degree labels
+        ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
+        ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(`${CONFIG.ANGLE_MIN}°`, centerX - 70, centerY - 40);
-        ctx.fillText(`${CONFIG.ANGLE_MAX}°`, centerX + 70, centerY - 40);
+        ctx.fillText('0°', centerX + radius + 20, centerY + 5);
+        ctx.fillText('90°', centerX, centerY - radius - 15);
+        ctx.fillText('45°', centerX + radius * 0.7 + 15, centerY - radius * 0.7 - 10);
 
-        const angleRange = Math.PI * 2 - startAngle + endAngle;
-        const needleAngle = startAngle + ratio * angleRange;
+        // Needle (bold)
+        const needleAngle = startAngle - ratio * angleRange;
+        const needleLength = radius + 5;
 
+        ctx.save();
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
-        const needleLength = radius - 10;
         ctx.lineTo(
             centerX + Math.cos(needleAngle) * needleLength,
             centerY + Math.sin(needleAngle) * needleLength
         );
-        ctx.strokeStyle = locked ? '#fdcb6e' : CONFIG.COLORS.ANGLE_NEEDLE;
-        ctx.lineWidth = 4;
+
+        // Needle color based on sweet spot
+        let needleColor = '#fff';
+        if (sweetSpot) {
+            needleColor = sweetSpot.color;
+            ctx.shadowColor = sweetSpot.color;
+            ctx.shadowBlur = 15;
+        } else if (locked) {
+            needleColor = '#aaa';
+        }
+        ctx.strokeStyle = needleColor;
+        ctx.lineWidth = 6;
         ctx.lineCap = 'round';
         ctx.stroke();
+        ctx.restore();
 
+        // Center dot
         ctx.beginPath();
-        ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
-        ctx.fillStyle = CONFIG.COLORS.ANGLE_NEEDLE;
+        ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
+        ctx.fillStyle = sweetSpot ? sweetSpot.color : '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Current angle display
+        const currentAngle = Math.floor(CONFIG.ANGLE_MIN + ratio * (CONFIG.ANGLE_MAX - CONFIG.ANGLE_MIN));
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${currentAngle}°`, centerX, centerY + radius + 40);
+
+        // Label
+        ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText('ANGLE', centerX, centerY + radius + 65);
+
+        // Sweet spot hit indicator
+        if (sweetSpot && locked) {
+            ctx.save();
+            ctx.fillStyle = sweetSpot.color;
+            ctx.font = 'bold 24px Arial';
+            ctx.shadowColor = sweetSpot.color;
+            ctx.shadowBlur = 10;
+            ctx.fillText(`${sweetSpot.name}! ${sweetSpot.multiplier}x`, centerX, centerY - radius - 30);
+            ctx.restore();
+        }
+    }
+
+    // Draw stats panel at top-left
+    drawStatsPanel(power, angle, multiplier, isPowerBonus, sweetSpot) {
+        const ctx = this.ctx;
+        const x = 30;
+        const y = 30;
+
+        ctx.save();
+
+        // Background panel
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.beginPath();
+        ctx.roundRect(x, y, 200, 100, 10);
         ctx.fill();
 
-        ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
-        ctx.font = 'bold 16px Arial';
-        ctx.fillText('ANGLE', centerX, centerY + radius + 30);
+        // Power info
+        ctx.fillStyle = isPowerBonus ? '#e74c3c' : '#00cec9';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`POWER: ${Math.floor(power)}%`, x + 15, y + 30);
+        if (isPowerBonus) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('(2x)', x + 140, y + 30);
+        }
+
+        // Angle info
+        ctx.fillStyle = sweetSpot ? sweetSpot.color : '#dfe6e9';
+        ctx.fillText(`ANGLE: ${Math.floor(angle)}°`, x + 15, y + 55);
+        if (sweetSpot) {
+            ctx.fillText(`(${sweetSpot.multiplier}x)`, x + 130, y + 55);
+        }
+
+        // Total multiplier
+        if (multiplier > 1) {
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 22px Arial';
+            ctx.fillText(`TOTAL: ${multiplier}x`, x + 15, y + 85);
+        }
+
+        ctx.restore();
     }
 
     // Draw distance UI
@@ -290,8 +428,8 @@ class Renderer {
         ctx.fillText('Loading...', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
     }
 
-    // Draw end screen
-    drawEndScreen(lastDistance, bestDistance) {
+    // Draw end screen with leaderboard
+    drawEndScreen(lastDistance, bestDistance, leaderboardData = [], playerName = '', showNameInput = false) {
         const ctx = this.ctx;
 
         ctx.save();
@@ -301,21 +439,52 @@ class Renderer {
         ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
 
         const centerX = CONFIG.CANVAS_WIDTH / 2;
-        const centerY = CONFIG.CANVAS_HEIGHT / 2;
+        const centerY = CONFIG.CANVAS_HEIGHT / 2 - 40;
 
+        // Your score
         ctx.textAlign = 'center';
         ctx.fillStyle = CONFIG.COLORS.UI_ACCENT;
         ctx.font = 'bold 72px Arial';
-        ctx.fillText(`${Math.floor(lastDistance)}m`, centerX, centerY - 20);
+        ctx.fillText(`${Math.floor(lastDistance)}m`, centerX, centerY - 40);
 
         ctx.fillStyle = CONFIG.COLORS.UI_TEXT;
-        ctx.font = '32px Arial';
-        ctx.fillText(`Best: ${Math.floor(bestDistance)}m`, centerX, centerY + 40);
+        ctx.font = '28px Arial';
+        ctx.fillText(`Best: ${Math.floor(bestDistance)}m`, centerX, centerY + 10);
 
+        if (playerName) {
+            ctx.fillStyle = '#aaa';
+            ctx.font = '18px Arial';
+            ctx.fillText(`Playing as: ${playerName}`, centerX, centerY + 40);
+        }
+
+        // Leaderboard
+        if (leaderboardData && leaderboardData.length > 0) {
+            const lbX = centerX;
+            const lbY = centerY + 80;
+
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('🏆 TOP 3 SCORES 🏆', lbX, lbY);
+
+            const medals = ['🥇', '🥈', '🥉'];
+            leaderboardData.forEach((entry, i) => {
+                const y = lbY + 35 + (i * 30);
+                ctx.fillStyle = i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : '#cd7f32';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${medals[i]} ${entry.name}: ${entry.distance}m`, lbX, y);
+            });
+        } else {
+            ctx.fillStyle = '#666';
+            ctx.font = '18px Arial';
+            ctx.fillText('No scores yet - be the first!', centerX, centerY + 100);
+        }
+
+        // Tap to play again
         ctx.font = '24px Arial';
         ctx.fillStyle = '#fff';
         ctx.globalAlpha = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
-        ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 110);
+        ctx.fillText('TAP TO PLAY AGAIN', centerX, CONFIG.CANVAS_HEIGHT - 60);
         ctx.globalAlpha = 1;
 
         ctx.restore();

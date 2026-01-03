@@ -50,6 +50,12 @@ class Assets {
             promises.push(this.loadSequenceImage('thugHurt', i, `asset/Thug/PNG/PNG Sequences/Right - Hurt/Right - Hurt_${idx}.png`));
         }
 
+        // Obstacle SVG icons
+        const obstacles = ['bicycle', 'person', 'barrel', 'ramp', 'cloud', 'bird'];
+        obstacles.forEach(name => {
+            promises.push(this.loadImage(name, `asset/${name}.svg`));
+        });
+
         await Promise.all(promises);
         this.loaded = true;
         console.log('All assets loaded!');

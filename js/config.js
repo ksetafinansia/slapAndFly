@@ -14,34 +14,45 @@ const CONFIG = {
     POWER_MIN: 15,
     POWER_MAX: 30,
     POWER_SPEED: 4,
+    POWER_BONUS_THRESHOLD: 0.9, // 90%+ = 2x power
+    POWER_BONUS_MULTIPLIER: 2.0,
 
-    // Angle Meter
-    ANGLE_MIN: 20,  // degrees
-    ANGLE_MAX: 60,
+    // Angle Meter (0-90 degrees, ground to up)
+    ANGLE_MIN: 0,   // degrees (ground level)
+    ANGLE_MAX: 90,  // degrees (straight up)
     ANGLE_SPEED: 3,
 
+    // Sweet Spots (symmetric: green 1x, yellow 3x, red 5x, yellow 3x, green 1x)
+    SWEET_SPOTS: [
+        { center: 0.1, width: 0.10, multiplier: 1, color: '#2ecc71', name: 'GOOD' },      // Green (left)
+        { center: 0.3, width: 0.10, multiplier: 3, color: '#f1c40f', name: 'GREAT' },     // Yellow (left)
+        { center: 0.5, width: 0.10, multiplier: 5, color: '#e74c3c', name: 'PERFECT' },   // Red (center)
+        { center: 0.7, width: 0.10, multiplier: 3, color: '#f1c40f', name: 'GREAT' },     // Yellow (right)
+        { center: 0.9, width: 0.10, multiplier: 1, color: '#2ecc71', name: 'GOOD' }       // Green (right)
+    ],
+
     // Animation Timing
-    SLAP_DURATION: 800,   // ms - golem walk + attack
-    IMPACT_TIME: 650,     // ms - impact at end of attack anim
+    SLAP_DURATION: 800,
+    IMPACT_TIME: 650,
 
     // End Condition
     STOP_THRESHOLD: 0.3,
-    STOP_DURATION: 2000,  // ms
+    STOP_DURATION: 2000,
 
     // Camera
     CAMERA_SMOOTHING: 0.08,
 
     // World
     GROUND_HEIGHT: 120,
-    SLAPPER_X: 150,          // Golem start position (left side)
-    RAGDOLL_START_X: 500,    // Thug position (more center)
+    SLAPPER_X: 150,
+    RAGDOLL_START_X: 500,
     RAGDOLL_START_Y: 400,
 
     // Character scales
     THUG_SCALE: 0.4,
     GOLEM_SCALE: 0.5,
 
-    // Parallax speeds (0 = static, 1 = same as camera)
+    // Parallax speeds
     PARALLAX: {
         sky: 0,
         clouds1: 0.05,
@@ -52,13 +63,14 @@ const CONFIG = {
         rocks2: 0.7
     },
 
-    // Colors (fallback if assets not loaded)
+    // Colors
     COLORS: {
         BACKGROUND: '#1a1a2e',
         GROUND: '#3d2817',
         GROUND_TOP: '#5d4037',
         POWER_BAR_BG: '#2d3436',
         POWER_BAR_FILL: '#00cec9',
+        POWER_BAR_FULL: '#e74c3c',
         POWER_BAR_OPTIMAL: '#fdcb6e',
         ANGLE_GAUGE_BG: '#2d3436',
         ANGLE_NEEDLE: '#e17055',

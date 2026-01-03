@@ -35,11 +35,14 @@ class Ragdoll {
         const y = this.y;
 
         // Single physics body for the thug (hitbox) - starts STATIC
-        this.body = Bodies.circle(x, y, 40, {
+        // Bouncy head with friction for natural deceleration
+        this.body = Bodies.circle(x, y, 35, {
             label: 'thug',
-            restitution: CONFIG.RESTITUTION,
-            friction: CONFIG.FRICTION,
-            frictionAir: CONFIG.AIR_RESISTANCE,
+            restitution: 0.7, // Bouncy but loses energy each bounce
+            friction: 0.4, // Surface friction - slows rolling
+            frictionStatic: 0.6, // Static friction - helps stop
+            frictionAir: 0.008, // Air resistance
+            density: 0.001, // Light body for higher bounces
             isStatic: true, // Won't move until launched!
             render: { visible: false }
         });
@@ -57,8 +60,10 @@ class Ragdoll {
         this.isFlying = true;
         this.frameIndex = 0;
 
-        // Start spinning based on force
-        this.spinSpeed = (force.x * 500) + (Math.random() * 5 + 10);
+        // Apply initial angular velocity (physics-based spin)
+        // Positive angular velocity = clockwise = rolling right
+        const initialSpin = force.x * 50 + 0.3;
+        this.Matter.Body.setAngularVelocity(this.body, initialSpin);
     }
 
     applyForce(force) {
@@ -66,8 +71,9 @@ class Ragdoll {
             this.launch(force);
         } else {
             this.Matter.Body.applyForce(this.body, this.body.position, force);
-            // Add more spin on collision
-            this.spinSpeed += force.x * 200;
+            // Add more angular velocity on collision (physics-based)
+            const currentAngVel = this.body.angularVelocity;
+            this.Matter.Body.setAngularVelocity(this.body, currentAngVel + force.x * 20);
         }
     }
 
@@ -96,11 +102,9 @@ class Ragdoll {
                 this.frameIndex = (this.frameIndex + 1) % 16; // 16 idle frames
             }
         } else {
-            // When flying, spin the head!
-            this.headRotation += this.spinSpeed * deltaTime;
-
-            // Gradually slow down spin
-            this.spinSpeed *= 0.995;
+            // Use the PHYSICS body's actual rotation for visual
+            // Physics engine handles friction/deceleration naturally
+            this.headRotation = this.body.angle;
 
             // Update hurt animation
             this.frameTimer += deltaTime * 1000;

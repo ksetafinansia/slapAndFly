@@ -6,6 +6,7 @@ import World from './world.js';
 import Camera from './camera.js';
 import Renderer from './renderer.js';
 import assets from './assets.js';
+import leaderboard from './leaderboard.js';
 
 // Wait for Matter.js to load
 const Matter = window.Matter;
@@ -20,18 +21,44 @@ class SlapGame {
         this.lastTime = 0;
         this.forceApplied = false;
 
+        // Leaderboard data
+        this.leaderboardData = [];
+        this.playerName = localStorage.getItem('playerName') || '';
+        this.showNameInput = false;
+        this.scoreSubmitted = false;
+
         // Start loading assets
         this.game = new Game();
         this.game.setState(CONFIG.STATES.LOADING);
 
         this.drawLoading();
 
-        assets.loadAll().then(() => {
+        // Load leaderboard and assets in parallel
+        Promise.all([
+            assets.loadAll(),
+            this.fetchLeaderboard()
+        ]).then(() => {
             this.init();
             this.bindEvents();
             this.game.setState(CONFIG.STATES.IDLE);
             requestAnimationFrame(this.gameLoop.bind(this));
         });
+    }
+
+    async fetchLeaderboard() {
+        this.leaderboardData = await leaderboard.getLeaderboard();
+    }
+
+    async submitScore() {
+        if (this.scoreSubmitted || !this.playerName) return;
+        
+        const result = await leaderboard.submitScore(this.playerName, this.game.lastDistance);
+        if (result.success) {
+            this.leaderboardData = result.leaderboard;
+            this.scoreSubmitted = true;
+            localStorage.setItem('playerName', this.playerName);
+        }
+        return result;
     }
 
     drawLoading() {
@@ -89,7 +116,7 @@ class SlapGame {
         Events.on(this.engine, 'collisionStart', (event) => {
             event.pairs.forEach(pair => {
                 const { bodyA, bodyB } = pair;
-                const obstacleLabels = ['bicycle', 'person', 'barrel', 'wall'];
+                const obstacleLabels = ['bicycle', 'person', 'barrel', 'ramp', 'cloud', 'bird'];
 
                 let thugBody = null;
                 let obstacleBody = null;
@@ -117,16 +144,32 @@ class SlapGame {
 
             if (this.game.state === CONFIG.STATES.LOADING) return;
 
+            // Handle END state - prompt for name if not set
+            if (this.game.state === CONFIG.STATES.END) {
+                if (!this.playerName) {
+                    this.promptForName();
+                    return;
+                }
+                // Submit score and restart
+                if (!this.scoreSubmitted) {
+                    this.submitScore();
+                }
+            }
+
             this.game.handleTap();
 
             // Reset for new round
             if (this.game.state === CONFIG.STATES.POWER_SELECT && this.forceApplied) {
                 this.forceApplied = false;
+                this.scoreSubmitted = false;
                 this.ragdoll.reset(
                     CONFIG.RAGDOLL_START_X,
                     CONFIG.CANVAS_HEIGHT - CONFIG.GROUND_HEIGHT - 80
                 );
+                this.world.reset(this.engine.world);
                 this.camera.reset();
+                // Refresh leaderboard
+                this.fetchLeaderboard();
             }
         };
 
@@ -136,6 +179,29 @@ class SlapGame {
         window.addEventListener('resize', () => {
             this.setupCanvas();
         });
+
+        // Listen for keyboard input for name
+        window.addEventListener('keydown', (e) => {
+            if (this.showNameInput) {
+                if (e.key === 'Enter' && this.playerName.length > 0) {
+                    this.showNameInput = false;
+                    this.submitScore();
+                } else if (e.key === 'Backspace') {
+                    this.playerName = this.playerName.slice(0, -1);
+                } else if (e.key.length === 1 && this.playerName.length < 15) {
+                    this.playerName += e.key;
+                }
+            }
+        });
+    }
+
+    promptForName() {
+        const name = prompt('Enter your name for the leaderboard (max 15 chars):');
+        if (name && name.trim()) {
+            this.playerName = name.trim().substring(0, 15);
+            localStorage.setItem('playerName', this.playerName);
+            this.submitScore();
+        }
     }
 
     gameLoop(timestamp) {
@@ -158,13 +224,22 @@ class SlapGame {
             this.forceApplied = true;
         }
 
-        // Update camera during flight
+        // Update camera during flight and generate obstacles ahead
         if (this.game.state === CONFIG.STATES.FLYING) {
             this.camera.follow(this.ragdoll.getPosition());
             this.camera.update();
 
             this.game.updateDistance(this.ragdoll.getPosition().x);
             this.game.checkEndCondition(this.ragdoll.getSpeed(), deltaTime);
+
+            // Generate obstacles dynamically after 1000m
+            const newObstacles = this.world.generateObstaclesAhead(this.ragdoll.getPosition().x);
+            if (newObstacles.length > 0) {
+                this.world.addToWorld(this.engine.world, newObstacles);
+            }
+
+            // Clean up old obstacles
+            this.world.cleanup(this.engine.world, this.ragdoll.getPosition().x);
         }
 
         this.render();
@@ -181,14 +256,14 @@ class SlapGame {
         // Draw parallax background (in screen space)
         this.renderer.drawParallaxBackground(camera.x);
 
-        // Apply camera transform for world objects
+        // Draw ground FIRST in screen space (always at bottom)
+        this.renderer.drawGround(camera.x);
+
+        // Apply camera transform for world objects (with zoom)
         ctx.save();
         this.camera.applyTransform(ctx);
 
-        // Draw ground
-        this.renderer.drawGround(camera.x);
-
-        // Draw obstacles
+        // Draw obstacles (affected by camera/zoom)
         this.drawObstacles();
 
         // Draw golem (left side, runs to attack)
@@ -208,25 +283,46 @@ class SlapGame {
         const bodies = this.world.objects;
 
         bodies.forEach(body => {
-            if (body && body.render && body.render.visible !== false) {
-                const vertices = body.vertices;
+            if (!body || body.render?.visible === false) return;
 
+            const pos = body.position;
+            const angle = body.angle;
+
+            // Apply opacity for "ghost" obstacles (already hit)
+            const opacity = body.render?.opacity ?? 1;
+
+            // Try to render with sprite image
+            const spriteName = body.render?.sprite;
+            const spriteImg = spriteName ? assets.get(spriteName) : null;
+
+            if (spriteImg) {
+                // Render SVG sprite with rotation
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                ctx.translate(pos.x, pos.y);
+                ctx.rotate(angle);
+
+                // Get bounds for sizing
+                const bounds = body.bounds;
+                const width = bounds.max.x - bounds.min.x;
+                const height = bounds.max.y - bounds.min.y;
+
+                ctx.drawImage(spriteImg, -width / 2, -height / 2, width, height);
+                ctx.restore();
+            } else {
+                // Fallback: draw with vertices
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                const vertices = body.vertices;
                 ctx.beginPath();
                 ctx.moveTo(vertices[0].x, vertices[0].y);
-
                 for (let i = 1; i < vertices.length; i++) {
                     ctx.lineTo(vertices[i].x, vertices[i].y);
                 }
-
                 ctx.closePath();
-                ctx.fillStyle = body.render.fillStyle || '#fff';
+                ctx.fillStyle = body.render?.fillStyle || '#888';
                 ctx.fill();
-
-                if (body.render.strokeStyle) {
-                    ctx.strokeStyle = body.render.strokeStyle;
-                    ctx.lineWidth = body.render.lineWidth || 1;
-                    ctx.stroke();
-                }
+                ctx.restore();
             }
         });
     }
@@ -248,23 +344,35 @@ class SlapGame {
                 break;
 
             case CONFIG.STATES.POWER_SELECT:
-                this.renderer.drawPowerMeter(this.game.powerRatio, false);
+                this.renderer.drawPowerMeter(this.game.powerRatio, false, false);
                 this.renderer.drawInstruction('TAP TO LOCK POWER');
                 break;
 
             case CONFIG.STATES.ANGLE_SELECT:
-                this.renderer.drawPowerMeter(this.game.powerRatio, true);
-                this.renderer.drawAngleMeter(this.game.angleRatio, false);
-                this.renderer.drawInstruction('TAP TO LOCK ANGLE');
+                this.renderer.drawPowerMeter(this.game.powerRatio, true, this.game.isPowerBonus);
+                this.renderer.drawAngleMeter(this.game.angleRatio, false, null);
+                this.renderer.drawInstruction('TAP FOR ANGLE');
                 break;
 
             case CONFIG.STATES.SLAP_ANIMATION:
-                this.renderer.drawPowerMeter(this.game.powerRatio, true);
-                this.renderer.drawAngleMeter(this.game.angleRatio, true);
+            case CONFIG.STATES.FLYING:
+                this.renderer.drawStatsPanel(
+                    this.game.powerRatio * 100,
+                    this.game.angle,
+                    this.game.getTotalMultiplier(),
+                    this.game.isPowerBonus,
+                    this.game.sweetSpot
+                );
                 break;
 
             case CONFIG.STATES.END:
-                this.renderer.drawEndScreen(this.game.lastDistance, this.game.bestDistance);
+                this.renderer.drawEndScreen(
+                    this.game.lastDistance, 
+                    this.game.bestDistance,
+                    this.leaderboardData,
+                    this.playerName,
+                    this.showNameInput
+                );
                 break;
         }
     }
