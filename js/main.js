@@ -176,6 +176,14 @@ class SlapGame {
         this.canvas.addEventListener('click', handleTap);
         this.canvas.addEventListener('touchstart', handleTap);
 
+        // Spacebar support for desktop users
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !this.showNameInput) {
+                e.preventDefault();
+                handleTap(e);
+            }
+        });
+
         window.addEventListener('resize', () => {
             this.setupCanvas();
         });
@@ -340,18 +348,18 @@ class SlapGame {
                 break;
 
             case CONFIG.STATES.IDLE:
-                this.renderer.drawInstruction('TAP TO START');
+                this.renderer.drawInstruction('TAP or SPACE to START');
                 break;
 
             case CONFIG.STATES.POWER_SELECT:
                 this.renderer.drawPowerMeter(this.game.powerRatio, false, false);
-                this.renderer.drawInstruction('TAP TO LOCK POWER');
+                this.renderer.drawInstruction('TAP or SPACE to LOCK POWER');
                 break;
 
             case CONFIG.STATES.ANGLE_SELECT:
                 this.renderer.drawPowerMeter(this.game.powerRatio, true, this.game.isPowerBonus);
                 this.renderer.drawAngleMeter(this.game.angleRatio, false, null);
-                this.renderer.drawInstruction('TAP FOR ANGLE');
+                this.renderer.drawInstruction('TAP or SPACE for ANGLE');
                 break;
 
             case CONFIG.STATES.SLAP_ANIMATION:

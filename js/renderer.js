@@ -484,7 +484,7 @@ class Renderer {
         ctx.font = '24px Arial';
         ctx.fillStyle = '#fff';
         ctx.globalAlpha = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
-        ctx.fillText('TAP TO PLAY AGAIN', centerX, CONFIG.CANVAS_HEIGHT - 60);
+        ctx.fillText('TAP or SPACE to PLAY AGAIN', centerX, CONFIG.CANVAS_HEIGHT - 60);
         ctx.globalAlpha = 1;
 
         ctx.restore();
