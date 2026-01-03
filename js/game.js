@@ -101,7 +101,7 @@ class Game {
 
     getForceVector() {
         const angleRad = (this.angle * Math.PI) / 180;
-        let forceMultiplier = 0.015;
+        let forceMultiplier = 0.008; // Reduced from 0.015 for more balanced distances
 
         // Power bonus (90%+ = 2x)
         if (this.isPowerBonus) {
